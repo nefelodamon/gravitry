@@ -15,7 +15,7 @@
   const SEEN_KEY = 'gravitry.seen.v1';
   const LAUNCH_PULL = 1.6;         // launch speed per world unit dragged
   const GHOST_SECONDS = 40;        // how much of the best run the ghost shows
-  const VERSION = '1.4.1';         // bump on every change
+  const VERSION = '1.4.2';         // bump on every change
   const RESULT_DELAY = 1000;       // ms between a run ending and the result card
   const SETTINGS_KEY = 'gravitry.settings.v1';
   const DIFFICULTY = {
@@ -564,8 +564,16 @@
     ui.optDone.focus();
   }
 
+  // When a window closes, drop keyboard focus from its buttons: otherwise Space and Enter
+  // keep going to a hidden button instead of pausing the game.
+  function releaseFocus(box) {
+    const a = document.activeElement;
+    if (a && a !== document.body && (!box || box.contains(a))) a.blur();
+  }
+
   function closeOptions() {
     ui.options.hidden = true;
+    releaseFocus(ui.options);
     if (optionsPausedRun) { paused = false; optionsPausedRun = false; }
   }
 
@@ -685,6 +693,7 @@
     }
     introKind = introQueue.shift() || null;
     ui.intro.hidden = !introKind;
+    if (!introKind) releaseFocus(ui.intro);
     if (!introKind) {
       if (autoReplay) startAutoReplay();
       return;
@@ -736,7 +745,7 @@
     ui.stats.hidden = false;
     $('stats-done').focus();
   }
-  function closeStats() { ui.stats.hidden = true; }
+  function closeStats() { ui.stats.hidden = true; releaseFocus(ui.stats); }
   function escapeHtml(t) { return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
   $('btn-stats').addEventListener('click', openStats);
   $('stats-done').addEventListener('click', closeStats);
@@ -1178,8 +1187,19 @@
       if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') { nextIntro(); e.preventDefault(); }
       return;
     }
-    if (e.target.tagName === 'INPUT') return;
-    if (e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return;
+    // Space always pauses / resumes a run, wherever keyboard focus happens to be (a top-bar
+    // button clicked earlier, or one inside a window that has since closed). Otherwise a
+    // focused button would swallow it, or be pressed again, and the run would stay paused.
+    if (e.key === ' ' && state === 'running' && !(e.target.tagName === 'INPUT' && /^(text|number|search)$/.test(e.target.type))) {
+      releaseFocus();
+      paused = !paused;
+      ui.paused.hidden = !paused;
+      e.preventDefault();
+      return;
+    }
+    const hiddenTarget = e.target.closest && e.target.closest('[hidden]');
+    if (e.target.tagName === 'INPUT' && !hiddenTarget) return;
+    if (e.target.tagName === 'BUTTON' && !hiddenTarget && (e.key === ' ' || e.key === 'Enter')) return;
     const k = e.key.toLowerCase();
     if (state === 'generating') return;
     if (state === 'aiming') { if (k === 'escape') { cancelAim(); e.preventDefault(); } return; }
@@ -1199,11 +1219,6 @@
     else if (k === 'f') cycleSpeed(e.shiftKey ? -1 : 1);
     else if (k === 'escape') { if (!(state === 'menu' && resumeFromMenu())) showMenu(); }
     else if (state === 'running' && ARROWS[e.key]) { thrustToward(ARROWS[e.key][0], ARROWS[e.key][1]); e.preventDefault(); }
-    else if (k === ' ' && state === 'running') {
-      paused = !paused;
-      ui.paused.hidden = !paused;
-      e.preventDefault();
-    }
   });
 
   $('btn-speed').addEventListener('click', e => { cycleSpeed(e.shiftKey ? -1 : 1); e.currentTarget.blur(); });
