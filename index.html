@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gravitry</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <header id="hud">
+      <div id="hud-play">
+      <div class="hud-row">
+        <button id="btn-menu" class="ghost-btn" title="Levels (Esc)">☰</button>
+        <h1 id="level-name">Gravitry</h1>
+        <span id="mode-chip" class="mode-chip" hidden></span>
+        <button id="btn-save" class="ghost-btn toggle save" hidden>☆ Save</button>
+        <button id="btn-field" class="ghost-btn toggle" aria-pressed="false" title="Show gravitational field (G)">Field <kbd>G</kbd></button>
+        <button id="btn-mute" class="ghost-btn toggle mute" aria-pressed="true" title="Mute sound (M)">🔊</button>
+        <button id="btn-options" class="ghost-btn toggle mute" title="Options (O)">⚙</button>
+        <div class="stats">
+          <span>Attempts <b id="attempts">0</b></span>
+          <span>Best <b id="best">–</b></span>
+          <span>Time <b id="clock">–</b></span>
+          <span title="How fast the object is moving right now (top speed of the run in brackets)">Velocity <b id="vel">–</b></span>
+          <span id="thrust-stat" hidden title="Thruster nudges left: click or tap (or arrow keys) while flying">Thrust <b id="thrust"></b></span>
+          <button id="btn-speed" class="stat-btn" title="Simulation speed: click or F to speed up, Shift+click or Shift+F to slow down">Speed <b id="speed">1×</b></button>
+        </div>
+      </div>
+      <div class="bar"><div id="bar-fill"></div><span id="dist">0 / 0</span></div>
+      <p id="hint"></p>
+      </div>
+
+      <div id="editor-bar" hidden>
+        <div class="hud-row">
+          <span class="ed-tag">EDITOR</span>
+          <input id="ed-name" type="text" maxlength="40" aria-label="Level name" placeholder="Level name">
+          <button id="ed-field-btn" class="ghost-btn toggle" aria-pressed="false" title="Show gravitational field (G)">Field <kbd>G</kbd></button>
+          <button id="ed-test" title="Test-play this level (T)">▶ Test <kbd>T</kbd></button>
+          <button id="ed-save" title="Save to My levels">Save</button>
+          <button id="ed-exit" class="secondary">Exit</button>
+        </div>
+        <div class="hud-row ed-row2">
+          <div class="ed-mode" role="group" aria-label="Edit mode">
+            <button id="ed-mode-stars" class="ghost-btn toggle" aria-pressed="true" title="Place and edit stars (Z)">● Stars</button>
+            <button id="ed-mode-zones" class="ghost-btn toggle zone" aria-pressed="false" title="Draw no-place zones (Z)">⊘ Zones</button>
+            <button id="ed-mode-worms" class="ghost-btn toggle worm" aria-pressed="false" title="Place wormhole pairs (W)">◎ Wormholes</button>
+            <button id="ed-mode-nebs" class="ghost-btn toggle neb" aria-pressed="false" title="Draw nebulae: gas clouds that slow the particle (N)">☁ Nebulae</button>
+          </div>
+          <label>Target <input id="ed-target" type="number" min="100" max="50000" step="50"></label>
+          <button id="ed-auto" class="ghost-btn toggle" title="Simulate drops and pick a fair target">Auto</button>
+          <label>Time <input id="ed-time" type="number" min="10" max="600" step="5">s</label>
+          <label class="chk" title="Players drag to throw the particle instead of dropping it"><input id="ed-launch" type="checkbox"> Slingshot</label>
+          <label title="Thruster nudges per run: players click while flying to push (0 = none)">Thrust <input id="ed-thrust" type="number" min="0" max="5" step="1"></label>
+          <span id="ed-status"></span>
+        </div>
+        <p class="ed-help" id="ed-help"></p>
+      </div>
+    </header>
+
+    <div id="stage">
+      <canvas id="arena"></canvas>
+
+      <div id="paused" class="badge" hidden>Paused</div>
+      <div id="toast" aria-live="polite"></div>
+
+      <div id="options" hidden>
+        <div class="panel options-panel" role="dialog" aria-label="Options">
+          <h2>Options</h2>
+
+          <h3>Sound</h3>
+          <div class="opt-grid">
+            <label for="opt-master">Master volume</label>
+            <input id="opt-master" type="range" min="0" max="100" step="1"><b id="opt-master-val"></b>
+            <label for="opt-sfx">Effects</label>
+            <input id="opt-sfx" type="range" min="0" max="100" step="1"><b id="opt-sfx-val"></b>
+            <label for="opt-hum">Engine hum</label>
+            <input id="opt-hum" type="range" min="0" max="100" step="1"><b id="opt-hum-val"></b>
+            <label for="opt-whoosh">Fly-by whooshes</label>
+            <input id="opt-whoosh" type="range" min="0" max="100" step="1"><b id="opt-whoosh-val"></b>
+          </div>
+          <label class="chk opt-chk"><input id="opt-clicks" type="checkbox"> Menu click sounds</label>
+
+          <h3>Levels</h3>
+          <div class="opt-row">
+            <span class="opt-label">Difficulty</span>
+            <div class="seg" role="group" aria-label="Difficulty">
+              <button data-opt="difficulty" data-val="easy">Easy</button>
+              <button data-opt="difficulty" data-val="normal">Normal</button>
+              <button data-opt="difficulty" data-val="hard">Hard</button>
+            </div>
+          </div>
+          <p class="opt-desc" id="opt-diff-desc"></p>
+          <div class="opt-row">
+            <span class="opt-label">Timer</span>
+            <div class="seg" role="group" aria-label="Timer">
+              <button data-opt="timer" data-val="normal">Normal</button>
+              <button data-opt="timer" data-val="double">2×</button>
+              <button data-opt="timer" data-val="off">Off</button>
+            </div>
+          </div>
+          <p class="opt-desc" id="opt-timer-desc"></p>
+          <p class="opt-desc opt-note" id="opt-note" hidden>Level changes apply from your next attempt.</p>
+
+          <h3>Random levels</h3>
+          <p class="opt-desc opt-left">What new random layouts may include (applies from the next layout). Plain stars are always in.</p>
+          <div id="opt-random" class="opt-feats">
+            <label class="chk opt-chk"><input type="checkbox" data-feature="blackholes"> Black holes</label>
+            <label class="chk opt-chk"><input type="checkbox" data-feature="comets"> Comets</label>
+            <label class="chk opt-chk"><input type="checkbox" data-feature="pulsars"> Pulsars</label>
+            <label class="chk opt-chk"><input type="checkbox" data-feature="whiteholes"> White holes</label>
+            <label class="chk opt-chk"><input type="checkbox" data-feature="wormholes"> Wormholes</label>
+            <label class="chk opt-chk"><input type="checkbox" data-feature="nebulae"> Nebulae</label>
+            <label class="chk opt-chk"><input type="checkbox" data-feature="thrust"> Thrusters</label>
+            <label class="chk opt-chk"><input type="checkbox" data-feature="slingshot"> Slingshot</label>
+            <label class="chk opt-chk"><input type="checkbox" data-feature="zones"> No-place zones</label>
+          </div>
+          <div class="opt-row"><span class="opt-label"></span><button id="opt-random-all" class="secondary small">All on / off</button></div>
+
+          <h3>Display</h3>
+          <label class="chk opt-chk"><input id="opt-shake" type="checkbox"> Screen shake on crashes</label>
+          <label class="chk opt-chk"><input id="opt-ghost" type="checkbox"> Show best-run ghost <kbd>H</kbd></label>
+          <label class="chk opt-chk"><input id="opt-slowmo" type="checkbox"> Slow motion on near misses</label>
+          <div class="opt-row"><span class="opt-label">Intro cards for new objects</span><button id="opt-tips" class="secondary small">Show again</button></div>
+
+          <div class="actions"><button id="opt-done">Done</button></div>
+        </div>
+      </div>
+
+      <div id="ed-zone-props" class="ed-props" hidden>
+        <div class="ed-props-row">
+          <label for="ed-zradius" id="ed-zlabel">Zone radius</label>
+          <input id="ed-zradius" type="range" min="30" max="700" step="1">
+          <b id="ed-zradius-val">110</b>
+        </div>
+        <div class="ed-props-row" id="ed-zdrag-row" hidden>
+          <label for="ed-zdrag">Drag</label>
+          <input id="ed-zdrag" type="range" min="5" max="200" step="1">
+          <b id="ed-zdrag-val">0.60</b>
+        </div>
+        <div class="ed-props-row">
+          <button id="ed-zdel" class="secondary danger" title="Delete zone (Del)">Delete zone</button>
+        </div>
+      </div>
+
+      <div id="ed-worm-props" class="ed-props" hidden>
+        <div class="ed-props-row">
+          <label for="ed-wradius">Mouth size</label>
+          <input id="ed-wradius" type="range" min="16" max="60" step="1">
+          <b id="ed-wradius-val">24</b>
+        </div>
+        <div class="ed-props-row">
+          <button id="ed-wdel" class="secondary danger" title="Delete this wormhole pair (Del)">Delete pair</button>
+        </div>
+      </div>
+
+      <div id="ed-props" class="ed-props" hidden>
+        <div class="ed-props-row ed-kind" role="group" aria-label="Object type">
+          <button data-kind="star" class="ghost-btn toggle" title="Star (K cycles)">★ Star</button>
+          <button data-kind="blackhole" class="ghost-btn toggle" title="Black hole (K cycles)">● Black hole</button>
+          <button data-kind="comet" class="ghost-btn toggle" title="Comet (K cycles)">☄ Comet</button>
+          <button data-kind="pulsar" class="ghost-btn toggle" title="Pulsar: its pull pulses (K cycles)">✷ Pulsar</button>
+          <button data-kind="whitehole" class="ghost-btn toggle" title="White hole: pushes the particle away (K cycles)">○ White hole</button>
+        </div>
+        <div class="ed-props-row">
+          <label for="ed-mass">Mass</label>
+          <input id="ed-mass" type="range" min="0" max="1000" step="1">
+          <b id="ed-mass-val">2.00</b>
+        </div>
+        <div class="ed-props-row">
+          <label class="chk"><input id="ed-fixed" type="checkbox"> Anchored <kbd>A</kbd></label>
+        </div>
+        <div class="ed-props-row" id="ed-period-row" hidden>
+          <label for="ed-period">Pulse every</label>
+          <input id="ed-period" type="number" min="1" max="20" step="0.5">
+          <span class="unit">s</span>
+        </div>
+        <div class="ed-props-row" id="ed-every-row">
+          <label for="ed-every">Repeat every</label>
+          <input id="ed-every" type="number" min="0" max="60" step="1">
+          <span class="unit">s (0 = once)</span>
+        </div>
+        <div class="ed-props-row">
+          <button id="ed-orbit" title="Set a circular orbit around the strongest nearby star (press again to reverse)">Orbit <kbd>O</kbd></button>
+          <button id="ed-stop" class="secondary" title="Zero velocity">Stop</button>
+          <button id="ed-del" class="secondary danger" title="Delete star (Del)">Delete</button>
+        </div>
+      </div>
+
+      <div id="overlay" class="panel" hidden>
+        <h2 id="overlay-title"></h2>
+        <p id="overlay-msg"></p>
+        <div class="actions">
+          <button id="btn-retry">Retry <kbd>R</kbd></button>
+          <button id="btn-next">Next <kbd>N</kbd></button>
+          <button id="btn-levels" class="secondary">Levels</button>
+          <button id="btn-share" class="secondary" title="Copy a link that replays this run">🔗 Share run</button>
+        </div>
+        <input id="share-link" type="text" readonly hidden aria-label="Share link">
+      </div>
+
+      <div id="intro" class="panel intro-panel" hidden role="dialog" aria-label="New object">
+        <canvas id="intro-icon" width="240" height="240"></canvas>
+        <div class="intro-text">
+          <p class="intro-kicker">New</p>
+          <h2 id="intro-title"></h2>
+          <p id="intro-msg"></p>
+          <div class="actions"><button id="intro-ok">Got it <kbd>Enter</kbd></button></div>
+        </div>
+      </div>
+
+      <div id="stats" hidden>
+        <div class="panel options-panel" role="dialog" aria-label="Stats">
+          <h2>Stats</h2>
+          <dl id="stats-list" class="stats-list"></dl>
+          <div class="actions"><button id="stats-done">Done</button><button id="stats-reset" class="secondary danger">Reset stats</button></div>
+        </div>
+      </div>
+
+      <div id="menu" class="panel wide" hidden>
+        <h2 class="logo">GRAVITRY</h2>
+        <p class="sub">Drop a particle. Let gravity do the rest. Travel far enough to pass, then see how long it survives.</p>
+        <div id="level-grid"></div>
+
+        <section class="my-section">
+          <div class="my-head">
+            <h3>My levels</h3>
+            <button id="btn-create" class="create-btn">＋ Create level</button>
+            <form id="seed-form" autocomplete="off">
+              <label for="seed-input">Play seed</label>
+              <input id="seed-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="9" placeholder="e.g. 871122">
+              <button type="submit">Go</button>
+            </form>
+          </div>
+          <p class="sub seed-note">Every random layout is numbered by its <b>seed</b>: the same number always builds the same level. Enter one to replay or share a layout.</p>
+          <p id="my-empty" class="sub">No saved levels yet. <b>Create</b> one, or play <b>Random</b> and press <kbd>S</kbd> on a layout you like.</p>
+          <div id="my-levels"></div>
+        </section>
+        <p class="sub">Dots mark your earlier drops: <span style="color:#ff5a5a">red</span> = short run, <span style="color:#5aff7a">green</span> = far. Use them to home in.</p>
+        <p class="menu-opts"><button id="btn-menu-options" class="secondary">⚙ Options <kbd>O</kbd></button> <button id="btn-stats" class="secondary">📊 Stats</button></p>
+        <p class="keys"><kbd>Click</kbd> place &nbsp; <kbd>R</kbd> retry &nbsp; <kbd>Space</kbd> pause &nbsp; <kbd>F</kbd> / <kbd>⇧F</kbd> speed up/down (up to 32×) &nbsp; <kbd>G</kbd> field &nbsp; <kbd>H</kbd> ghost &nbsp; <kbd>←↑→↓</kbd> thrust &nbsp; <kbd>S</kbd> save &nbsp; <kbd>E</kbd> edit level &nbsp; <kbd>M</kbd> mute &nbsp; <kbd>Esc</kbd> levels</p>
+        <p class="version" id="version"></p>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/physics.js"></script>
+  <script src="js/crash-sound.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/random.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
