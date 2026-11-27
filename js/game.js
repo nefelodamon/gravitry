@@ -15,7 +15,7 @@
   const SEEN_KEY = 'gravitry.seen.v1';
   const LAUNCH_PULL = 1.6;         // launch speed per world unit dragged
   const GHOST_SECONDS = 40;        // how much of the best run the ghost shows
-  const VERSION = '1.4.2';         // bump on every change
+  const VERSION = '1.5.0';         // bump on every change
   const RESULT_DELAY = 1000;       // ms between a run ending and the result card
   const SETTINGS_KEY = 'gravitry.settings.v1';
   const DIFFICULTY = {
@@ -54,7 +54,7 @@
     optDone: $('opt-done'), optNote: $('opt-note'), modeChip: $('mode-chip'), toast: $('toast'), btnSave: $('btn-save'),
     hudPlay: $('hud-play'), btnCreate: $('btn-create'),
     myGrid: $('my-levels'), myEmpty: $('my-empty'), seedForm: $('seed-form'), seedInput: $('seed-input'),
-    btnShare: $('btn-share'), shareLink: $('share-link'),
+    btnShare: $('btn-share'), btnReplay: $('btn-replay'), shareLink: $('share-link'),
     intro: $('intro'), introIcon: $('intro-icon'), introTitle: $('intro-title'), introMsg: $('intro-msg'), introOk: $('intro-ok'),
     stats: $('stats'), statsList: $('stats-list'), statsReset: $('stats-reset'),
   };
@@ -331,6 +331,18 @@
   }
 
   function retry() { if (world) startLevel(levelIndex, true); }
+
+  // Watch the run that just ended again, exactly as it flew (same start, same nudges).
+  // It plays as a replay, so it isn't counted as an attempt or in stats and bests.
+  function replayLast() {
+    if (state !== 'over' || !lastRun || ui.btnReplay.hidden) return;
+    const keep = lastRun, run = keep.run;
+    startLevel(levelIndex, true);
+    if (state !== 'placing') return;
+    if (!launchAt(run.x, run.y, run.vx || 0, run.vy || 0, true, run.nudges)) return;
+    world.ownReplay = true;
+    lastRun = keep;
+  }
 
   // Generate a layout. Generation simulates sample drops (~0.5-2s),
   // so show a badge and yield a frame before the heavy work.
@@ -956,7 +968,8 @@
     const passed = !!world.passed;
     const path = world.path;
     const replay = world.replay;
-    marks.push({ x: world.start.x, y: world.start.y, frac: Math.min(1, path / world.target), won: passed });
+    const ownReplay = !!world.ownReplay;
+    if (!ownReplay) marks.push({ x: world.start.x, y: world.start.y, frac: Math.min(1, path / world.target), won: passed });
     endEffects(world);
     if (!replay) recordStats(world);
     const run = runOf(world);
@@ -988,7 +1001,11 @@
       timeout: 'Out of time.',
       orbit: 'Locked into a steady orbit' + (world.orbitPeriod ? ` (one lap every ${world.orbitPeriod.toFixed(1)}s).` : '.'),
     };
-    if (replay) {
+    if (ownReplay) {
+      ui.oTitle.textContent = passed ? 'Replay: cleared' : 'Replay';
+      ui.oMsg.textContent = `${reasons[world.status]} Total distance ${Math.round(path)} in ${world.time.toFixed(1)}s` +
+        (passed ? ` (passed ${world.target} at ${world.passedAt.toFixed(1)}s).` : ` of ${world.target}.`);
+    } else if (replay) {
       ui.oTitle.textContent = 'Shared run';
       ui.oMsg.textContent = `${reasons[world.status]} Your friend travelled ${Math.round(path)}` +
         (passed ? ` and passed ${world.target}.` : ` of ${world.target}.`) + ' Press R to try to beat it.';
@@ -1013,6 +1030,7 @@
     if (world.topSpeed) ui.oMsg.textContent += ` Top speed ${Math.round(world.topSpeed)}.`;
     ui.oTitle.className = passed || (isShared() && !replay && ui.oTitle.textContent === 'You beat it!') ? 'win' : 'lose';
     ui.btnNext.hidden = isSaved() || isShared() || !(isRandom() || isTest() || (passed && !last));
+    ui.btnReplay.hidden = !passed || (replay && !ownReplay);
     updateHud();
     // hold the result card back a moment so the crash / finish can be seen
     const ended = world;
@@ -1211,7 +1229,8 @@
       return;
     }
     if (isTest() && state !== 'menu' && (k === 'e' || k === 'escape')) { backToEditor(); return; }
-    if (k === 'r' && state !== 'menu') retry();
+    if (k === 'w' && state === 'over') replayLast();
+    else if (k === 'r' && state !== 'menu') retry();
     else if (k === 'n' && state !== 'menu') nextLevel();
     else if (k === 's' && state !== 'menu') saveCurrent();
     else if (k === 'e' && state !== 'menu') editCurrent();
@@ -1223,6 +1242,7 @@
 
   $('btn-speed').addEventListener('click', e => { cycleSpeed(e.shiftKey ? -1 : 1); e.currentTarget.blur(); });
   ui.btnRetry.addEventListener('click', retry);
+  ui.btnReplay.addEventListener('click', replayLast);
   ui.btnNext.addEventListener('click', nextLevel);
   ui.btnLevels.addEventListener('click', showMenu);
   ui.btnMenu.addEventListener('click', showMenu);
